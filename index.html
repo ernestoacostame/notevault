@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0d0d0d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>NoteVault</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root {
+  --bg: #0d0d0d; --surface: #161616; --surface-hover: #1e1e1e;
+  --border: #2a2a2a; --text: #e0e0e0; --text-muted: #777;
+  --accent: #c9a227; --accent-soft: rgba(201,162,39,0.12); --danger: #e05252;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: var(--bg); color: var(--text); height: 100vh; overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+input, textarea, select, button { font-family: inherit; }
+::selection { background: var(--accent); color: #000; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ─── Layout ─── */
+.app { display: flex; height: 100vh; }
+.sidebar { width: 260px; min-width: 260px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; height: 100%; }
+.note-list { width: 300px; min-width: 300px; border-right: 1px solid var(--border); display: flex; flex-direction: column; height: 100%; }
+.editor-pane { flex: 1; display: flex; flex-direction: column; height: 100%; }
+
+/* ─── Sidebar ─── */
+.sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.sidebar-header h1 { font-size: 16px; font-weight: 700; letter-spacing: -0.5px; }
+.sidebar-actions { display: flex; gap: 4px; }
+.sidebar-actions button { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 6px; border-radius: 6px; transition: 0.15s; }
+.sidebar-actions button:hover { background: var(--surface-hover); color: var(--text); }
+
+.search-box { padding: 12px 16px; position: relative; }
+.search-box input { width: 100%; padding: 9px 12px 9px 36px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; outline: none; transition: border-color 0.15s; }
+.search-box input:focus { border-color: var(--accent); }
+.search-box svg { position: absolute; left: 28px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+
+.nav-section { padding: 12px 10px 4px; display: flex; align-items: center; justify-content: space-between; }
+.nav-section span { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.nav-section button { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px; }
+
+.nav-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: transparent; border: none; border-radius: 8px; color: var(--text-muted); cursor: pointer; font-size: 13px; font-weight: 500; text-align: left; transition: 0.15s; }
+.nav-item:hover { background: var(--surface-hover); }
+.nav-item.active { background: var(--accent-soft); color: var(--accent); }
+.nav-item .count { margin-left: auto; font-size: 12px; opacity: 0.6; }
+
+.tags-cloud { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 10px 10px; }
+.tag-pill { padding: 4px 10px; background: rgba(128,128,128,0.12); border: 1px solid transparent; border-radius: 20px; color: var(--text-muted); cursor: pointer; font-size: 12px; font-weight: 500; transition: 0.15s; }
+.tag-pill:hover { background: var(--accent-soft); }
+.tag-pill.active { background: var(--accent-soft); border-color: rgba(201,162,39,0.25); color: var(--accent); }
+
+.sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; margin-top: auto; }
+.user-avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 11px; font-weight: 700; flex-shrink: 0; }
+
+.new-folder-row { padding: 4px 10px 8px; display: flex; gap: 6px; }
+.new-folder-row input { flex: 1; padding: 7px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; outline: none; }
+.new-folder-row button { background: var(--accent); border: none; border-radius: 6px; color: #000; padding: 4px 12px; cursor: pointer; font-size: 12px; font-weight: 600; }
+
+/* ─── Note List ─── */
+.list-header { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+.list-header .title { flex: 1; font-weight: 600; font-size: 15px; }
+.btn-new { background: var(--accent); border: none; border-radius: 8px; color: #000; cursor: pointer; padding: 7px 14px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 5px; transition: 0.15s; }
+.btn-new:hover { filter: brightness(1.1); }
+
+.notes-container { flex: 1; overflow-y: auto; }
+.note-item { padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
+.note-item:hover { background: var(--surface-hover); }
+.note-item.active { background: var(--accent-soft); }
+.note-item .note-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.note-item .note-title { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%; }
+.note-item.active .note-title { color: var(--accent); }
+.note-item .note-date { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.note-item .note-excerpt { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-tags { margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap; }
+.note-tags span { font-size: 10px; padding: 2px 7px; background: var(--accent-soft); color: var(--accent); border-radius: 10px; }
+
+.empty-state { padding: 40px 20px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+/* ─── Editor ─── */
+.toolbar { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.toolbar-btn { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted); cursor: pointer; padding: 5px 9px; font-size: 13px; min-width: 30px; text-align: center; transition: 0.15s; line-height: 1.2; }
+.toolbar-btn:hover { background: var(--surface-hover); color: var(--text); }
+.toolbar-btn.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.toolbar-btn.danger { color: var(--danger); }
+.toolbar-spacer { flex: 1; }
+
+.meta-bar { padding: 8px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.meta-bar select { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 5px 8px; font-size: 12px; outline: none; cursor: pointer; }
+.meta-bar .pin-btn { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted); cursor: pointer; padding: 5px 10px; font-size: 12px; transition: 0.15s; }
+.meta-bar .pin-btn.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.meta-bar .meta-date { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+
+.editor-content { flex: 1; overflow: auto; }
+.editor-content textarea {
+  width: 100%; height: 100%; background: transparent; border: none; color: var(--text);
+  padding: 20px 24px; font-size: 14px; line-height: 1.7; resize: none; outline: none;
+  font-family: inherit;
+}
+.editor-content textarea::placeholder { color: var(--text-muted); }
+
+.preview-content { padding: 20px 24px; line-height: 1.7; font-size: 14px; max-width: 720px; }
+.preview-content h1 { font-size: 1.8em; margin: 0.5em 0 0.3em; font-weight: 700; }
+.preview-content h2 { font-size: 1.4em; margin: 0.5em 0 0.3em; font-weight: 600; }
+.preview-content h3 { font-size: 1.2em; margin: 0.5em 0 0.3em; font-weight: 600; }
+.preview-content strong { font-weight: 700; }
+.preview-content em { font-style: italic; }
+.preview-content code { background: rgba(128,128,128,0.15); padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
+.preview-content a { color: var(--accent); text-decoration: underline; }
+.preview-content img { max-width: 100%; border-radius: 6px; margin: 8px 0; }
+.preview-content del { opacity: 0.5; }
+
+.editor-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); gap: 12px; }
+.editor-empty svg { opacity: 0.3; transform: scale(2); }
+.btn-create { margin-top: 8px; padding: 10px 20px; background: var(--accent-soft); border: 1px solid rgba(201,162,39,0.25); border-radius: 10px; color: var(--accent); cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+
+/* ─── Login ─── */
+.login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; background: var(--bg); }
+.login-box { width: 100%; max-width: 380px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px 32px; text-align: center; }
+.login-box h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; margin: 8px 0 4px; }
+.login-box p { color: var(--text-muted); font-size: 13px; margin-bottom: 24px; }
+.login-box input { width: 100%; padding: 12px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-size: 14px; margin-bottom: 12px; outline: none; transition: border-color 0.15s; }
+.login-box input:focus { border-color: var(--accent); }
+.login-box .btn-submit { width: 100%; padding: 12px; background: var(--accent); color: #000; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.15s; }
+.login-box .btn-submit:hover { filter: brightness(1.1); }
+.login-box .toggle { color: var(--text-muted); font-size: 13px; margin-top: 16px; cursor: pointer; }
+.login-box .toggle:hover { color: var(--text); }
+.login-error { background: rgba(224,82,82,0.1); color: var(--danger); padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+
+/* ─── Theme Picker ─── */
+.theme-picker { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; gap: 6px; flex-wrap: wrap; }
+.theme-dot { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; position: relative; transition: 0.15s; }
+.theme-dot.active { border-color: var(--text); }
+.theme-dot:hover { transform: scale(1.1); }
+
+/* ─── Toast ─── */
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--border); padding: 10px 20px; border-radius: 10px; font-size: 13px; color: var(--accent); z-index: 1000; box-shadow: 0 8px 30px rgba(0,0,0,0.3); animation: toastIn 0.3s ease; }
+@keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+/* ─── Mobile ─── */
+.mobile-overlay { display: none; position: fixed; inset: 0; z-index: 100; }
+.mobile-overlay.open { display: block; }
+.mobile-overlay .backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.5); }
+.mobile-overlay .sidebar-mobile { position: relative; width: 80%; max-width: 300px; height: 100%; z-index: 101; }
+.hamburger { display: none; background: none; border: none; color: var(--text); cursor: pointer; padding: 0; }
+.back-btn { display: none; background: none; border: none; color: var(--text); cursor: pointer; padding: 2px; margin-right: 4px; }
+
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .note-list { width: 100%; min-width: 100%; }
+  .note-list.hidden { display: none; }
+  .editor-pane.hidden { display: none; }
+  .hamburger { display: block; }
+  .back-btn { display: block; }
+}
+
+/* ─── Saving indicator ─── */
+.save-indicator { font-size: 11px; color: var(--text-muted); padding: 2px 8px; }
+.save-indicator.saving { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- App se renderiza aquí -->
+<div id="app"></div>
+
+<script>
+// ─── Themes ───
+const THEMES = {
+  obsidian:  { name: 'Obsidian',  bg: '#0d0d0d', surface: '#161616', surfaceHover: '#1e1e1e', border: '#2a2a2a', text: '#e0e0e0', textMuted: '#777', accent: '#c9a227', accentSoft: 'rgba(201,162,39,0.12)', danger: '#e05252' },
+  arctic:    { name: 'Arctic',    bg: '#f0f4f8', surface: '#ffffff', surfaceHover: '#e8eef4', border: '#d0dae4', text: '#1a2a3a', textMuted: '#6b7f94', accent: '#2563eb', accentSoft: 'rgba(37,99,235,0.1)', danger: '#dc2626' },
+  forest:    { name: 'Forest',    bg: '#0f1a12', surface: '#162019', surfaceHover: '#1d2b22', border: '#2a3d2f', text: '#d4e4d8', textMuted: '#6a8a72', accent: '#4ade80', accentSoft: 'rgba(74,222,128,0.12)', danger: '#f87171' },
+  midnight:  { name: 'Midnight',  bg: '#0a0e1a', surface: '#111827', surfaceHover: '#1a2236', border: '#1f2b47', text: '#dde4f0', textMuted: '#6478a0', accent: '#818cf8', accentSoft: 'rgba(129,140,248,0.12)', danger: '#f87171' },
+  rosewood:  { name: 'Rosewood',  bg: '#1a0f10', surface: '#221517', surfaceHover: '#2d1c1f', border: '#3d282b', text: '#e8d5d7', textMuted: '#9a7074', accent: '#f472b6', accentSoft: 'rgba(244,114,182,0.12)', danger: '#ef4444' },
+  sand:      { name: 'Sand',      bg: '#f5f0e8', surface: '#fffdf7', surfaceHover: '#f0eadd', border: '#ddd5c4', text: '#3d3428', textMuted: '#8a7e6b', accent: '#b45309', accentSoft: 'rgba(180,83,9,0.1)', danger: '#dc2626' },
+};
+
+// ─── State ───
+let state = {
+  user: null,
+  notes: [],
+  folders: [],
+  activeNote: null,
+  activeFolder: 'all',
+  activeTag: null,
+  searchQuery: '',
+  theme: localStorage.getItem('nv_theme') || 'obsidian',
+  showPreview: false,
+  showThemePicker: false,
+  showNewFolder: false,
+  sidebarOpen: false,
+  mobileView: 'list',
+  saving: false,
+  toast: null,
+};
+
+let saveTimeout = null;
+let autoSaveTimeout = null;
+
+// ─── API ───
+async function api(action, method = 'GET', body = null) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
+  if (body) opts.body = JSON.stringify(body);
+  const url = method === 'DELETE' && body?.id
+    ? `api.php?action=${action}&id=${body.id}`
+    : `api.php?action=${action}`;
+  const res = await fetch(url, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error');
+  return data;
+}
+
+// ─── Helpers ───
+function extractTags(content) {
+  const m = (content || '').match(/#(\w[\w-]*)/g);
+  return m ? [...new Set(m.map(t => t.toLowerCase()))] : [];
+}
+
+function getAutoTitle(content) {
+  if (!content) return 'Sin título';
+  const first = content.split('\n')[0].replace(/^#+\s*/, '').replace(/[*_~`#\[\]()!]/g, '').trim();
+  return first.length > 60 ? first.slice(0, 57) + '...' : first || 'Sin título';
+}
+
+function formatDate(ts) {
+  const d = new Date(ts * 1000);
+  const now = new Date();
+  const diff = now - d;
+  if (diff < 60000) return 'Ahora';
+  if (diff < 3600000) return `hace ${Math.floor(diff / 60000)}m`;
+  if (diff < 86400000) return `hace ${Math.floor(diff / 3600000)}h`;
+  if (diff < 604800000) return d.toLocaleDateString('es', { weekday: 'short' });
+  return d.toLocaleDateString('es', { month: 'short', day: 'numeric' });
+}
+
+function parseMarkdown(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.+?)__/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/_([^_]+?)_/g, '<em>$1</em>')
+    .replace(/~~(.+?)~~/g, '<del>$1</del>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" />')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/^- (.+)$/gm, '• $1')
+    .replace(/(#\w[\w-]*)/g, '<span style="opacity:0.6;font-size:0.9em">$1</span>')
+    .replace(/\n/g, '<br>');
+}
+
+function applyTheme(name) {
+  const t = THEMES[name];
+  if (!t) return;
+  const root = document.documentElement;
+  root.style.setProperty('--bg', t.bg);
+  root.style.setProperty('--surface', t.surface);
+  root.style.setProperty('--surface-hover', t.surfaceHover);
+  root.style.setProperty('--border', t.border);
+  root.style.setProperty('--text', t.text);
+  root.style.setProperty('--text-muted', t.textMuted);
+  root.style.setProperty('--accent', t.accent);
+  root.style.setProperty('--accent-soft', t.accentSoft);
+  root.style.setProperty('--danger', t.danger);
+  document.querySelector('meta[name="theme-color"]').content = t.bg;
+}
+
+function showToast(msg) {
+  state.toast = msg;
+  render();
+  setTimeout(() => { state.toast = null; render(); }, 2000);
+}
+
+// ─── Render ───
+function render() {
+  const app = document.getElementById('app');
+  if (!state.user) {
+    app.innerHTML = renderLogin();
+    bindLogin();
+  } else {
+    app.innerHTML = renderApp();
+    bindApp();
+  }
+}
+
+// ─── Login ───
+function renderLogin() {
+  return `
+    <div class="login-screen">
+      <div class="login-box">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="opacity:0.5;margin-bottom:4px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        <h1>NoteVault</h1>
+        <p id="login-subtitle">Inicia sesión para continuar</p>
+        <div id="login-error"></div>
+        <input id="login-user" placeholder="Usuario" autocomplete="username" />
+        <input id="login-pass" placeholder="Contraseña" type="password" autocomplete="current-password" />
+        <button class="btn-submit" id="login-btn">Iniciar Sesión</button>
+        <p class="toggle" id="login-toggle">¿No tienes cuenta? Créala aquí</p>
+      </div>
+    </div>
+  `;
+}
+
+function bindLogin() {
+  let isRegister = false;
+  const btn = document.getElementById('login-btn');
+  const toggle = document.getElementById('login-toggle');
+  const userInput = document.getElementById('login-user');
+  const passInput = document.getElementById('login-pass');
+  const errDiv = document.getElementById('login-error');
+  const subtitle = document.getElementById('login-subtitle');
+
+  toggle.onclick = () => {
+    isRegister = !isRegister;
+    btn.textContent = isRegister ? 'Crear Cuenta' : 'Iniciar Sesión';
+    toggle.textContent = isRegister ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Créala aquí';
+    subtitle.textContent = isRegister ? 'Crea tu cuenta' : 'Inicia sesión para continuar';
+    errDiv.innerHTML = '';
+  };
+
+  async function doAuth() {
+    const username = userInput.value.trim();
+    const password = passInput.value;
+    if (!username || !password) { errDiv.innerHTML = '<div class="login-error">Completa todos los campos</div>'; return; }
+    try {
+      btn.disabled = true;
+      btn.textContent = 'Cargando...';
+      const data = await api(isRegister ? 'register' : 'login', 'POST', { username, password });
+      state.user = data.user;
+      await loadData();
+      render();
+    } catch (e) {
+      errDiv.innerHTML = `<div class="login-error">${e.message}</div>`;
+      btn.disabled = false;
+      btn.textContent = isRegister ? 'Crear Cuenta' : 'Iniciar Sesión';
+    }
+  }
+
+  btn.onclick = doAuth;
+  passInput.onkeydown = (e) => { if (e.key === 'Enter') doAuth(); };
+  userInput.onkeydown = (e) => { if (e.key === 'Enter') passInput.focus(); };
+}
+
+// ─── Load Data ───
+async function loadData() {
+  try {
+    state.notes = await api('notes');
+    state.folders = await api('folders');
+  } catch (e) { console.error(e); }
+}
+
+// ─── Main App Render ───
+function renderApp() {
+  const isMobile = window.innerWidth <= 768;
+  const filtered = getFilteredNotes();
+  const allTags = getAllTags();
+  const currentNote = state.notes.find(n => n.id === state.activeNote);
+  const folderName = state.activeTag ? state.activeTag :
+    state.activeFolder === 'all' ? 'Todas las Notas' :
+    state.folders.find(f => f.id === state.activeFolder)?.name || 'Notas';
+
+  return `
+    ${renderSidebar(allTags, isMobile)}
+    ${state.sidebarOpen && isMobile ? `<div class="mobile-overlay open"><div class="backdrop" id="sidebar-backdrop"></div><div class="sidebar-mobile">${renderSidebarContent(allTags)}</div></div>` : ''}
+    <div class="note-list ${isMobile && state.mobileView !== 'list' ? 'hidden' : ''}">
+      <div class="list-header">
+        <button class="hamburger" id="hamburger-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <span class="title">${folderName}</span>
+        <button class="btn-new" id="btn-new-note">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nueva
+        </button>
+      </div>
+      <div class="notes-container">
+        ${filtered.length === 0 ? `<div class="empty-state">${state.searchQuery ? 'Sin resultados' : 'No hay notas. ¡Crea una!'}</div>` : ''}
+        ${filtered.map(n => {
+          const tags = extractTags(n.content);
+          return `
+            <div class="note-item ${state.activeNote === n.id ? 'active' : ''}" data-note-id="${n.id}">
+              <div class="note-row">
+                <span class="note-title">${n.pinned ? '📌 ' : ''}${escH(n.title || 'Sin título')}</span>
+                <span class="note-date">${formatDate(n.updatedAt)}</span>
+              </div>
+              <div class="note-excerpt">${escH((n.content || '').replace(/[#*_~\`\[\]()!]/g, '').slice(0, 80)) || 'Nota vacía'}</div>
+              ${tags.length > 0 ? `<div class="note-tags">${tags.slice(0, 3).map(t => `<span>${t}</span>`).join('')}</div>` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+    <div class="editor-pane ${isMobile && state.mobileView !== 'editor' ? 'hidden' : ''}">
+      ${currentNote ? renderEditor(currentNote) : renderEditorEmpty()}
+    </div>
+    ${state.toast ? `<div class="toast">${escH(state.toast)}</div>` : ''}
+  `;
+}
+
+function renderSidebar(allTags, isMobile) {
+  if (isMobile) return '';
+  return `<div class="sidebar">${renderSidebarContent(allTags)}</div>`;
+}
+
+function renderSidebarContent(allTags) {
+  if (!allTags) allTags = getAllTags();
+  return `
+    <div class="sidebar-header">
+      <h1>NoteVault</h1>
+      <div class="sidebar-actions">
+        <button id="btn-theme" title="Tema">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        </button>
+        <button id="btn-logout" title="Cerrar sesión">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+    ${state.showThemePicker ? `
+      <div class="theme-picker">
+        ${Object.entries(THEMES).map(([k, v]) => `<div class="theme-dot ${state.theme === k ? 'active' : ''}" data-theme="${k}" style="background:${v.accent}" title="${v.name}"></div>`).join('')}
+      </div>
+    ` : ''}
+    <div class="search-box">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="search-input" placeholder="Buscar notas..." value="${escH(state.searchQuery)}" />
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:0 8px">
+      <button class="nav-item ${state.activeFolder === 'all' && !state.activeTag ? 'active' : ''}" data-folder="all">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Todas las Notas
+        <span class="count">${state.notes.length}</span>
+      </button>
+      <div class="nav-section">
+        <span>Carpetas</span>
+        <button id="btn-add-folder">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </div>
+      ${state.showNewFolder ? `
+        <div class="new-folder-row">
+          <input id="new-folder-input" placeholder="Nombre de carpeta" />
+          <button id="btn-save-folder">OK</button>
+        </div>
+      ` : ''}
+      ${state.folders.map(f => `
+        <button class="nav-item ${state.activeFolder === f.id && !state.activeTag ? 'active' : ''}" data-folder="${f.id}">
+          <span style="font-size:14px">${f.icon}</span> ${escH(f.name)}
+          <span class="count">${state.notes.filter(n => n.folder === f.id).length}</span>
+        </button>
+      `).join('')}
+      ${allTags.length > 0 ? `
+        <div class="nav-section"><span>Etiquetas</span></div>
+        <div class="tags-cloud">
+          ${allTags.map(t => `<span class="tag-pill ${state.activeTag === t ? 'active' : ''}" data-tag="${t}">${t}</span>`).join('')}
+        </div>
+      ` : ''}
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-avatar">${state.user ? state.user[0].toUpperCase() : '?'}</div>
+      ${escH(state.user || '')}
+    </div>
+  `;
+}
+
+function renderEditor(note) {
+  return `
+    <div class="toolbar">
+      <button class="back-btn" id="btn-back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      </button>
+      <button class="toolbar-btn" data-format="bold" title="Negrita" style="font-weight:700">B</button>
+      <button class="toolbar-btn" data-format="italic" title="Cursiva" style="font-style:italic">I</button>
+      <button class="toolbar-btn" data-format="heading" title="Encabezado">H</button>
+      <button class="toolbar-btn" data-format="link" title="Enlace">🔗</button>
+      <button class="toolbar-btn" data-format="image" title="Imagen">🖼</button>
+      <button class="toolbar-btn" data-format="video" title="Video">▶</button>
+      <span class="toolbar-spacer"></span>
+      <span class="save-indicator ${state.saving ? 'saving' : ''}" id="save-status">${state.saving ? '● Guardando...' : '✓ Guardado'}</span>
+      <button class="toolbar-btn ${state.showPreview ? 'active' : ''}" id="btn-preview" title="${state.showPreview ? 'Editar' : 'Vista previa'}">
+        ${state.showPreview ? '✎' : '👁'}
+      </button>
+      <button class="toolbar-btn" id="btn-copy" title="Copiar al portapapeles">📋</button>
+      <button class="toolbar-btn danger" id="btn-delete" title="Eliminar">🗑</button>
+    </div>
+    <div class="meta-bar">
+      <select id="note-folder">
+        ${state.folders.map(f => `<option value="${f.id}" ${note.folder === f.id ? 'selected' : ''}>${f.icon} ${escH(f.name)}</option>`).join('')}
+      </select>
+      <button class="pin-btn ${note.pinned ? 'active' : ''}" id="btn-pin">📌 ${note.pinned ? 'Fijada' : 'Fijar'}</button>
+      <span class="meta-date">${new Date(note.updatedAt * 1000).toLocaleString('es')}</span>
+    </div>
+    <div class="editor-content">
+      ${state.showPreview
+        ? `<div class="preview-content">${parseMarkdown(note.content)}</div>`
+        : `<textarea id="note-editor" placeholder="Empieza a escribir... Usa Markdown para formato. Agrega #etiquetas en línea.">${escH(note.content || '')}</textarea>`
+      }
+    </div>
+  `;
+}
+
+function renderEditorEmpty() {
+  return `
+    <div class="editor-empty">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <p style="font-size:15px">Selecciona o crea una nota</p>
+      <button class="btn-create" id="btn-new-note-empty">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nueva Nota
+      </button>
+    </div>
+  `;
+}
+
+function escH(str) {
+  const div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
+
+function getFilteredNotes() {
+  let result = state.notes;
+  if (state.activeFolder !== 'all') result = result.filter(n => n.folder === state.activeFolder);
+  if (state.activeTag) result = result.filter(n => extractTags(n.content).includes(state.activeTag));
+  if (state.searchQuery) {
+    const q = state.searchQuery.toLowerCase();
+    result = result.filter(n => (n.title || '').toLowerCase().includes(q) || (n.content || '').toLowerCase().includes(q));
+  }
+  return result;
+}
+
+function getAllTags() {
+  const tagSet = new Set();
+  state.notes.forEach(n => extractTags(n.content).forEach(t => tagSet.add(t)));
+  return [...tagSet].sort();
+}
+
+// ─── Event Bindings ───
+function bindApp() {
+  // Hamburger
+  document.getElementById('hamburger-btn')?.addEventListener('click', () => {
+    state.sidebarOpen = true;
+    render();
+  });
+
+  // Sidebar backdrop
+  document.getElementById('sidebar-backdrop')?.addEventListener('click', () => {
+    state.sidebarOpen = false;
+    render();
+  });
+
+  // Theme
+  document.getElementById('btn-theme')?.addEventListener('click', () => {
+    state.showThemePicker = !state.showThemePicker;
+    render();
+  });
+
+  // Theme dots
+  document.querySelectorAll('.theme-dot').forEach(el => {
+    el.addEventListener('click', () => {
+      state.theme = el.dataset.theme;
+      localStorage.setItem('nv_theme', state.theme);
+      applyTheme(state.theme);
+      state.showThemePicker = false;
+      render();
+    });
+  });
+
+  // Logout
+  document.getElementById('btn-logout')?.addEventListener('click', async () => {
+    await api('logout');
+    state.user = null;
+    state.notes = [];
+    state.folders = [];
+    state.activeNote = null;
+    render();
+  });
+
+  // Search
+  const searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      state.searchQuery = e.target.value;
+      state.activeTag = null;
+      render();
+      // Re-focus after render
+      const newInput = document.getElementById('search-input');
+      if (newInput) { newInput.focus(); newInput.selectionStart = newInput.selectionEnd = e.target.selectionStart; }
+    });
+  }
+
+  // Folders nav
+  document.querySelectorAll('[data-folder]').forEach(el => {
+    el.addEventListener('click', () => {
+      state.activeFolder = el.dataset.folder;
+      state.activeTag = null;
+      state.sidebarOpen = false;
+      render();
+    });
+  });
+
+  // Tags
+  document.querySelectorAll('[data-tag]').forEach(el => {
+    el.addEventListener('click', () => {
+      state.activeTag = state.activeTag === el.dataset.tag ? null : el.dataset.tag;
+      state.activeFolder = 'all';
+      state.sidebarOpen = false;
+      render();
+    });
+  });
+
+  // New folder
+  document.getElementById('btn-add-folder')?.addEventListener('click', () => {
+    state.showNewFolder = !state.showNewFolder;
+    render();
+    document.getElementById('new-folder-input')?.focus();
+  });
+
+  document.getElementById('btn-save-folder')?.addEventListener('click', createFolder);
+  document.getElementById('new-folder-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') createFolder();
+  });
+
+  // New note buttons
+  document.getElementById('btn-new-note')?.addEventListener('click', createNote);
+  document.getElementById('btn-new-note-empty')?.addEventListener('click', createNote);
+
+  // Note items
+  document.querySelectorAll('.note-item').forEach(el => {
+    el.addEventListener('click', () => {
+      state.activeNote = el.dataset.noteId;
+      state.mobileView = 'editor';
+      state.showPreview = false;
+      render();
+      document.getElementById('note-editor')?.focus();
+    });
+  });
+
+  // Back button (mobile)
+  document.getElementById('btn-back')?.addEventListener('click', () => {
+    state.mobileView = 'list';
+    state.activeNote = null;
+    render();
+  });
+
+  // Toolbar format
+  document.querySelectorAll('[data-format]').forEach(el => {
+    el.addEventListener('click', () => applyFormat(el.dataset.format));
+  });
+
+  // Preview toggle
+  document.getElementById('btn-preview')?.addEventListener('click', () => {
+    state.showPreview = !state.showPreview;
+    render();
+  });
+
+  // Copy
+  document.getElementById('btn-copy')?.addEventListener('click', async () => {
+    const note = state.notes.find(n => n.id === state.activeNote);
+    if (!note) return;
+    try {
+      await navigator.clipboard.writeText(note.content);
+      showToast('✓ Copiado al portapapeles');
+    } catch { showToast('Error al copiar'); }
+  });
+
+  // Delete
+  document.getElementById('btn-delete')?.addEventListener('click', async () => {
+    if (!confirm('¿Eliminar esta nota?')) return;
+    try {
+      await api('notes', 'DELETE', { id: state.activeNote });
+      state.notes = state.notes.filter(n => n.id !== state.activeNote);
+      state.activeNote = null;
+      state.mobileView = 'list';
+      render();
+    } catch (e) { showToast('Error: ' + e.message); }
+  });
+
+  // Folder select
+  document.getElementById('note-folder')?.addEventListener('change', (e) => {
+    updateNote({ folder: e.target.value });
+  });
+
+  // Pin
+  document.getElementById('btn-pin')?.addEventListener('click', () => {
+    const note = state.notes.find(n => n.id === state.activeNote);
+    if (note) updateNote({ pinned: !note.pinned });
+  });
+
+  // Editor textarea
+  const editor = document.getElementById('note-editor');
+  if (editor) {
+    editor.addEventListener('input', (e) => {
+      const content = e.target.value;
+      const title = getAutoTitle(content);
+      // Update local state immediately
+      const note = state.notes.find(n => n.id === state.activeNote);
+      if (note) {
+        note.content = content;
+        note.title = title;
+      }
+      // Debounced save to server
+      if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
+      state.saving = true;
+      const saveStatus = document.getElementById('save-status');
+      if (saveStatus) { saveStatus.textContent = '● Guardando...'; saveStatus.classList.add('saving'); }
+
+      autoSaveTimeout = setTimeout(async () => {
+        try {
+          await api('notes', 'PUT', { id: state.activeNote, content, title });
+          state.saving = false;
+          const s = document.getElementById('save-status');
+          if (s) { s.textContent = '✓ Guardado'; s.classList.remove('saving'); }
+        } catch (e) { console.error(e); }
+      }, 600);
+    });
+
+    // Tab support
+    editor.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const start = editor.selectionStart;
+        editor.value = editor.value.slice(0, start) + '  ' + editor.value.slice(editor.selectionEnd);
+        editor.selectionStart = editor.selectionEnd = start + 2;
+        editor.dispatchEvent(new Event('input'));
+      }
+    });
+  }
+}
+
+async function createNote() {
+  const folder = state.activeFolder === 'all' ? 'inbox' : state.activeFolder;
+  try {
+    const note = await api('notes', 'POST', { title: 'Sin título', content: '', folder });
+    state.notes.unshift(note);
+    state.activeNote = note.id;
+    state.mobileView = 'editor';
+    state.showPreview = false;
+    render();
+    document.getElementById('note-editor')?.focus();
+  } catch (e) { showToast('Error: ' + e.message); }
+}
+
+async function createFolder() {
+  const input = document.getElementById('new-folder-input');
+  const name = input?.value?.trim();
+  if (!name) return;
+  try {
+    const folder = await api('folders', 'POST', { name });
+    state.folders.push(folder);
+    state.showNewFolder = false;
+    render();
+  } catch (e) { showToast('Error: ' + e.message); }
+}
+
+async function updateNote(changes) {
+  const note = state.notes.find(n => n.id === state.activeNote);
+  if (!note) return;
+  Object.assign(note, changes);
+  try {
+    await api('notes', 'PUT', { id: note.id, ...changes });
+    render();
+  } catch (e) { showToast('Error: ' + e.message); }
+}
+
+function applyFormat(type) {
+  const el = document.getElementById('note-editor');
+  if (!el) return;
+  const start = el.selectionStart;
+  const end = el.selectionEnd;
+  const text = el.value;
+  const selected = text.slice(start, end);
+  let replacement = '';
+  if (type === 'bold') replacement = `**${selected || 'negrita'}**`;
+  else if (type === 'italic') replacement = `_${selected || 'cursiva'}_`;
+  else if (type === 'heading') replacement = `## ${selected || 'Encabezado'}`;
+  else if (type === 'link') replacement = `[${selected || 'texto'}](url)`;
+  else if (type === 'image') replacement = `![${selected || 'alt'}](url-imagen)`;
+  else if (type === 'video') replacement = `[▶ ${selected || 'Video'}](url-video)`;
+  el.value = text.slice(0, start) + replacement + text.slice(end);
+  el.dispatchEvent(new Event('input'));
+  el.focus();
+  el.setSelectionRange(start, start + replacement.length);
+}
+
+// ─── Init ───
+async function init() {
+  applyTheme(state.theme);
+  // Check session
+  try {
+    const session = await api('session');
+    if (session.user) {
+      state.user = session.user;
+      await loadData();
+    }
+  } catch {}
+  render();
+  window.addEventListener('resize', render);
+}
+
+// ─── Service Worker for Offline ───
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+init();
+</script>
+</body>
+</html>
