@@ -14,6 +14,22 @@ define('DATA_DIR', __DIR__ . '/data');
 define('USERS_FILE', DATA_DIR . '/users.json');
 define('BCRYPT_COST', 12);
 
+/**
+ * CONTROL DE REGISTRO
+ * ───────────────────
+ * 'open'     → Cualquiera puede crear cuenta (por defecto)
+ * 'closed'   → Nadie puede registrarse (ciérralo después de crear tu cuenta)
+ * 'invite'   → Solo con código de invitación (cambia INVITE_CODE abajo)
+ */
+define('REGISTRATION_MODE', 'open');
+define('INVITE_CODE', 'cambia-este-codigo-secreto');
+
+/**
+ * LÍMITE DE USUARIOS
+ * Máximo número de cuentas permitidas (0 = sin límite)
+ */
+define('MAX_USERS', 0);
+
 // Crear directorio de datos si no existe
 if (!is_dir(DATA_DIR)) {
     mkdir(DATA_DIR, 0700, true);
@@ -62,15 +78,43 @@ function generateId() {
     return bin2hex(random_bytes(8));
 }
 
+// ─── Error handler global ───
+set_error_handler(function($errno, $errstr) {
+    jsonResponse(['error' => 'Error interno del servidor'], 500);
+});
+
 // ─── Router ───
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
+// ─── Endpoint de estado (para diagnóstico) ───
+if ($action === 'status') {
+    jsonResponse([
+        'ok' => true,
+        'php' => PHP_VERSION,
+        'data_writable' => is_writable(DATA_DIR),
+        'registration' => REGISTRATION_MODE,
+    ]);
+}
+
 // ─── AUTH ───
 if ($action === 'register' && $method === 'POST') {
+    // ── Verificar modo de registro ──
+    if (REGISTRATION_MODE === 'closed') {
+        jsonResponse(['error' => 'El registro de nuevas cuentas está desactivado'], 403);
+    }
+
     $input = getInput();
     $username = trim($input['username'] ?? '');
     $password = $input['password'] ?? '';
+
+    // ── Verificar código de invitación si aplica ──
+    if (REGISTRATION_MODE === 'invite') {
+        $code = trim($input['invite_code'] ?? '');
+        if ($code !== INVITE_CODE) {
+            jsonResponse(['error' => 'Código de invitación inválido'], 403);
+        }
+    }
 
     if (strlen($username) < 3 || strlen($username) > 30) {
         jsonResponse(['error' => 'El usuario debe tener entre 3 y 30 caracteres'], 400);
@@ -83,6 +127,12 @@ if ($action === 'register' && $method === 'POST') {
     }
 
     $users = loadJson(USERS_FILE, []);
+
+    // ── Verificar límite de usuarios ──
+    if (MAX_USERS > 0 && count($users) >= MAX_USERS) {
+        jsonResponse(['error' => 'Se alcanzó el límite máximo de usuarios'], 403);
+    }
+
     if (isset($users[$username])) {
         jsonResponse(['error' => 'El usuario ya existe'], 409);
     }
