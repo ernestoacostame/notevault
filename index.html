@@ -235,6 +235,26 @@ input,textarea,select,button{font-family:inherit}
 
 /* Image upload drop zone */
 .ed-c.drag-over::after{content:'Suelta la imagen aquí';position:absolute;inset:0;background:var(--accent-soft);border:2px dashed var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--accent);font-weight:600;pointer-events:none;z-index:5}
+
+/* ═══ Trash ═══ */
+.trash-hdr{padding:14px 16px;display:flex;align-items:center;gap:10px;min-height:52px}
+.trash-hdr .lst-t{flex:1;font-size:15px;font-weight:700;letter-spacing:-.2px}
+.btn-empty{background:none;border:1px solid var(--danger);border-radius:8px;color:var(--danger);cursor:pointer;padding:6px 13px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:4px;transition:.15s}
+.btn-empty:hover{background:rgba(255,69,58,.12);filter:brightness(1.1)}
+.btn-empty .mi{font-size:17px}
+.trash-card{margin:2px 8px;padding:10px 12px;border-radius:10px;border:1px solid transparent;transition:.12s;position:relative}
+.trash-card:hover{background:var(--bg-hover)}
+.trash-card .n-card-t{font-size:13px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;line-height:1.4;display:flex;align-items:center;gap:5px}
+.trash-card .n-card-m{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary)}
+.trash-card .n-card-d{font-weight:500}
+.trash-card .n-card-x{color:var(--text-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.trash-actions{display:flex;gap:4px;margin-top:6px}
+.trash-actions button{background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-secondary);cursor:pointer;padding:4px 10px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:4px;transition:.15s}
+.trash-actions button:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.trash-actions button.danger:hover{border-color:var(--danger);color:var(--danger);background:rgba(255,69,58,.1)}
+.trash-actions button .mi{font-size:15px}
+.trash-info{padding:24px 20px;text-align:center;color:var(--text-tertiary);font-size:13px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.trash-info .mi{font-size:40px;opacity:.3}
 </style>
 </head>
 <body>
@@ -245,7 +265,7 @@ input,textarea,select,button{font-family:inherit}
 <script>
 const THEMES={obsidian:{n:'Obsidian',d:'#ffba0a'},arctic:{n:'Arctic',d:'#007aff'},forest:{n:'Forest',d:'#34d399'},midnight:{n:'Midnight',d:'#818cf8'},rosewood:{n:'Rosewood',d:'#f472b6'},sand:{n:'Sand',d:'#b45309'}};
 const FOLDER_ICONS=['folder','inbox','home','work','school','star','favorite','bookmark','label','flag','lightbulb','code','terminal','science','music_note','photo_camera','videocam','brush','palette','restaurant','local_cafe','flight','directions_car','fitness_center','medical_services','pets','sports_esports','shopping_cart','attach_money','account_balance','business_center','inventory','archive','cloud','storage','smartphone','laptop','headphones','public','language','travel_explore','eco','park','wb_sunny','nights_stay','bolt','rocket_launch','psychology','groups','person','mail','chat','notifications','event','schedule','task_alt','check_circle','error','warning','info','lock','shield','key','visibility','edit','description','article','book','library_books','menu_book','newspaper','summarize'];
-let S={user:null,notes:[],folders:[],activeNote:null,activeFolder:'all',activeTag:null,searchQuery:'',theme:localStorage.getItem('nv_theme')||'obsidian',showPreview:false,showThemePicker:false,showNewFolder:false,showIconPicker:false,showFolderDD:false,newFolderIcon:'folder',sidebarOpen:false,mobileView:'list',saving:false,toast:null,uploading:false};
+let S={user:null,notes:[],folders:[],trash:[],activeNote:null,activeFolder:'all',activeTag:null,searchQuery:'',theme:localStorage.getItem('nv_theme')||'obsidian',showPreview:false,showThemePicker:false,showNewFolder:false,showIconPicker:false,showFolderDD:false,newFolderIcon:'folder',sidebarOpen:false,mobileView:'list',saving:false,toast:null,uploading:false,viewTrash:false};
 let autoSave=null;
 
 // ─── API ───
@@ -253,6 +273,7 @@ async function api(act,m='GET',body=null){
   const o={method:m,headers:{'Content-Type':'application/json'},credentials:'same-origin'};
   if(body)o.body=JSON.stringify(body);
   const url=m==='DELETE'&&body?.id?`api.php?action=${act}&id=${body.id}`:`api.php?action=${act}`;
+  if(m==='DELETE'&&!body?.id&&act==='empty_trash'){}
   let r;try{r=await fetch(url,o)}catch{throw new Error('Sin conexión al servidor')}
   const ct=r.headers.get('content-type')||'';
   if(!ct.includes('json')){console.error(await r.text().catch(()=>''));throw new Error('Servidor no responde JSON')}
@@ -276,7 +297,7 @@ function parseMd(t){if(!t)return'';return t.replace(/&/g,'&amp;').replace(/</g,'
 function applyTheme(n){document.documentElement.setAttribute('data-theme',n)}
 function toast(m){S.toast=m;render();setTimeout(()=>{S.toast=null;render()},2000)}
 
-function getFiltered(){let r=S.notes;if(S.activeFolder!=='all')r=r.filter(n=>n.folder===S.activeFolder);if(S.activeTag)r=r.filter(n=>extractTags(n.content).includes(S.activeTag));if(S.searchQuery){const q=S.searchQuery.toLowerCase();r=r.filter(n=>(n.title||'').toLowerCase().includes(q)||(n.content||'').toLowerCase().includes(q))}return r}
+function getFiltered(){if(S.viewTrash)return[];let r=S.notes;if(S.activeFolder!=='all')r=r.filter(n=>n.folder===S.activeFolder);if(S.activeTag)r=r.filter(n=>extractTags(n.content).includes(S.activeTag));if(S.searchQuery){const q=S.searchQuery.toLowerCase();r=r.filter(n=>(n.title||'').toLowerCase().includes(q)||(n.content||'').toLowerCase().includes(q))}return r}
 function allTags(){const s=new Set();S.notes.forEach(n=>extractTags(n.content).forEach(t=>s.add(t)));return[...s].sort()}
 
 // ═══ Render ═══
@@ -306,13 +327,13 @@ function bindLogin(){
 // ─── App ───
 function appHTML(){
   const mob=window.innerWidth<=860,notes=getFiltered(),pinned=notes.filter(n=>n.pinned),unpinned=notes.filter(n=>!n.pinned),tags=allTags(),cur=S.notes.find(n=>n.id===S.activeNote);
-  const fn=S.activeTag?S.activeTag:S.activeFolder==='all'?'Todas las Notas':S.folders.find(f=>f.id===S.activeFolder)?.name||'Notas';
+  const fn=S.viewTrash?'Papelera':S.activeTag?S.activeTag:S.activeFolder==='all'?'Todas las Notas':S.folders.find(f=>f.id===S.activeFolder)?.name||'Notas';
   return`${mob?'':'<div class="sidebar">'+sbHTML(tags)+'</div>'}${S.sidebarOpen&&mob?'<div class="mob-overlay open"><div class="bdrop" id="mob-bd"></div><div class="sb-drawer"><div class="sidebar" style="display:flex;width:100%;border:none">'+sbHTML(tags)+'</div></div></div>':''}
     <div class="note-list ${mob&&S.mobileView!=='list'?'hidden':''}">
-      <div class="lst-hdr"><button class="hamburger" id="hmb"><span class="mi">menu</span></button><span class="lst-t">${esc(fn)}</span><button class="btn-new" id="btn-n"><span class="mi">add</span>Nueva</button></div>
-      <div class="notes-scroll">${notes.length===0?`<div class="empty-l">${S.searchQuery?'Sin resultados':'No hay notas aún'}</div>`:''}${pinned.length?'<div class="sec-div"><span class="mi mi-xs">push_pin</span> Fijadas</div>'+pinned.map(ncHTML).join(''):''}${pinned.length&&unpinned.length?'<div class="sec-div">Notas</div>':''}${unpinned.map(ncHTML).join('')}</div>
+      <div class="lst-hdr"><button class="hamburger" id="hmb"><span class="mi">menu</span></button><span class="lst-t">${esc(fn)}</span>${S.viewTrash?(S.trash.length?'<button class="btn-empty" id="btn-empty"><span class="mi">delete_sweep</span>Vaciar</button>':''):'<button class="btn-new" id="btn-n"><span class="mi">add</span>Nueva</button>'}</div>
+      <div class="notes-scroll">${S.viewTrash?trashListHTML():(notes.length===0?`<div class="empty-l">${S.searchQuery?'Sin resultados':'No hay notas aún'}</div>`:'')+(pinned.length?'<div class="sec-div"><span class="mi mi-xs">push_pin</span> Fijadas</div>'+pinned.map(ncHTML).join(''):'')+(pinned.length&&unpinned.length?'<div class="sec-div">Notas</div>':'')+unpinned.map(ncHTML).join('')}</div>
     </div>
-    <div class="editor-pane ${mob&&S.mobileView!=='editor'?'hidden':''}">${cur?edHTML(cur):emptyHTML()}</div>
+    <div class="editor-pane ${mob&&S.mobileView!=='editor'?'hidden':''}">${S.viewTrash?trashEditorHTML():(cur?edHTML(cur):emptyHTML())}</div>
     ${S.uploading?'<div class="upload-progress"><span class="mi">progress_activity</span>Subiendo imagen...</div>':''}
     ${S.toast?`<div class="toast">${esc(S.toast)}</div>`:''}`;
 }
@@ -332,10 +353,12 @@ function sbHTML(tags){
     ${S.showThemePicker?'<div class="theme-row">'+Object.entries(THEMES).map(([k,v])=>`<div class="th-dot ${S.theme===k?'active':''}" data-theme="${k}" style="background:${v.d}" title="${v.n}"></div>`).join('')+'</div>':''}
     <div class="sb-search"><span class="mi">search</span><input id="search" placeholder="Buscar notas..." value="${esc(S.searchQuery)}" /></div>
     <div class="sb-nav">
-      <button class="nav-item ${S.activeFolder==='all'&&!S.activeTag?'active':''}" data-folder="all"><span class="mi">grid_view</span>Todas las Notas<span class="cnt">${S.notes.length}</span></button>
+      <button class="nav-item ${S.activeFolder==='all'&&!S.activeTag&&!S.viewTrash?'active':''}" data-folder="all"><span class="mi">grid_view</span>Todas las Notas<span class="cnt">${S.notes.length}</span></button>
       <div class="nav-lbl"><span>Carpetas</span><button id="btn-af"><span class="mi mi-xs">add</span></button></div>
       ${S.showNewFolder?`<div class="nf-row"><button class="nf-icon-btn" id="nf-icon-btn" title="Elegir icono"><span class="mi" id="nf-icon-preview">${S.newFolderIcon||'folder'}</span></button><input id="nf-in" placeholder="Nombre..." /><button id="nf-ok">OK</button></div>${S.showIconPicker?'<div class="icon-picker" id="icon-picker">'+FOLDER_ICONS.map(i=>`<button class="ip-btn ${(S.newFolderIcon||'folder')===i?'active':''}" data-pick-icon="${i}"><span class="mi">${i}</span></button>`).join('')+'</div>':''}`:''}
-      ${S.folders.map(f=>`<button class="nav-item ${S.activeFolder===f.id&&!S.activeTag?'active':''}" data-folder="${f.id}" data-drop-folder="${f.id}"><span class="mi">${f.icon}</span>${esc(f.name)}<span class="cnt">${S.notes.filter(n=>n.folder===f.id).length}</span></button>`).join('')}
+      ${S.folders.map(f=>`<button class="nav-item ${S.activeFolder===f.id&&!S.activeTag&&!S.viewTrash?'active':''}" data-folder="${f.id}" data-drop-folder="${f.id}"><span class="mi">${f.icon}</span>${esc(f.name)}<span class="cnt">${S.notes.filter(n=>n.folder===f.id).length}</span></button>`).join('')}
+      <div class="nav-lbl"><span></span></div>
+      <button class="nav-item ${S.viewTrash?'active':''}" id="nav-trash"><span class="mi">delete</span>Papelera<span class="cnt">${S.trash.length}</span></button>
       ${tags.length?'<div class="nav-lbl"><span>Etiquetas</span></div><div class="tags-wrap">'+tags.map(t=>`<span class="tag-p ${S.activeTag===t?'active':''}" data-tag="${t}">${t}</span>`).join('')+'</div>':''}
     </div>
     <div class="sb-footer"><div class="u-avatar">${S.user?S.user[0].toUpperCase():'?'}</div>${esc(S.user||'')}</div>`;
@@ -378,6 +401,27 @@ function emptyHTML(){
   return`<div class="ed-empty"><span class="mi" style="font-size:48px;opacity:.2">description</span><p>Selecciona o crea una nota</p><button class="btn-cr" id="btn-ne"><span class="mi">add</span>Nueva Nota</button></div>`;
 }
 
+function trashListHTML(){
+  if(S.trash.length===0) return'<div class="trash-info"><span class="mi">delete_outline</span><p>La papelera está vacía</p></div>';
+  return S.trash.map(n=>{
+    const ex=(n.content||'').replace(/[#*_~`\[\]()!]/g,'').trim();
+    const f=S.folders.find(x=>x.id===n.folder);
+    return`<div class="trash-card" data-trash-id="${n.id}">
+      <div class="n-card-t"><span class="mi mi-xs" style="opacity:.4">delete</span>${esc(n.title||'Sin título')}</div>
+      <div class="n-card-m"><span class="n-card-d">${fmtDate(n.deletedAt)}</span><span class="n-card-x">${esc(ex.slice(0,70))}</span></div>
+      ${f?`<div class="n-card-f"><span class="mi">${f.icon}</span>${esc(f.name)}</div>`:''}
+      <div class="trash-actions">
+        <button data-restore="${n.id}"><span class="mi">restore</span>Restaurar</button>
+        <button class="danger" data-perm-del="${n.id}"><span class="mi">delete_forever</span>Eliminar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function trashEditorHTML(){
+  return`<div class="ed-empty"><span class="mi" style="font-size:48px;opacity:.2">delete_outline</span><p>Papelera de notas</p><p style="font-size:13px;color:var(--text-tertiary);max-width:300px;text-align:center">Las notas eliminadas se encuentran aquí. Puedes restaurarlas o eliminarlas permanentemente.</p></div>`;
+}
+
 // ═══ Bindings ═══
 function bindApp(){
   const $=id=>document.getElementById(id);
@@ -394,8 +438,8 @@ function bindApp(){
   if(se){se.addEventListener('input',e=>{const p=e.target.selectionStart;S.searchQuery=e.target.value;S.activeTag=null;render();const ne=$('search');if(ne){ne.focus();ne.setSelectionRange(p,p)}})}
 
   // Nav
-  document.querySelectorAll('[data-folder]').forEach(el=>el.addEventListener('click',()=>{S.activeFolder=el.dataset.folder;S.activeTag=null;S.sidebarOpen=false;render()}));
-  document.querySelectorAll('[data-tag]').forEach(el=>el.addEventListener('click',()=>{S.activeTag=S.activeTag===el.dataset.tag?null:el.dataset.tag;S.activeFolder='all';S.sidebarOpen=false;render()}));
+  document.querySelectorAll('[data-folder]').forEach(el=>el.addEventListener('click',()=>{S.activeFolder=el.dataset.folder;S.activeTag=null;S.viewTrash=false;S.activeNote=null;S.sidebarOpen=false;render()}));
+  document.querySelectorAll('[data-tag]').forEach(el=>el.addEventListener('click',()=>{S.activeTag=S.activeTag===el.dataset.tag?null:el.dataset.tag;S.activeFolder='all';S.viewTrash=false;S.sidebarOpen=false;render()}));
 
   // New folder
   $('btn-af')?.addEventListener('click',()=>{S.showNewFolder=!S.showNewFolder;S.showIconPicker=false;S.newFolderIcon='folder';render();$('nf-in')?.focus()});
@@ -436,7 +480,7 @@ function bindApp(){
   document.querySelectorAll('[data-fmt]').forEach(el=>el.addEventListener('click',()=>doFormat(el.dataset.fmt)));
   $('btn-pv')?.addEventListener('click',()=>{S.showPreview=!S.showPreview;render()});
   $('btn-cp')?.addEventListener('click',async()=>{const n=S.notes.find(x=>x.id===S.activeNote);if(!n)return;try{await navigator.clipboard.writeText(n.content);toast('✓ Copiado')}catch{toast('Error')}});
-  $('btn-dl')?.addEventListener('click',async()=>{if(!confirm('¿Eliminar esta nota?'))return;try{await api('notes','DELETE',{id:S.activeNote});S.notes=S.notes.filter(n=>n.id!==S.activeNote);S.activeNote=null;S.mobileView='list';render()}catch(e){toast('Error: '+e.message)}});
+  $('btn-dl')?.addEventListener('click',async()=>{if(!confirm('¿Mover a la papelera?'))return;try{await api('notes','DELETE',{id:S.activeNote});const deleted=S.notes.find(n=>n.id===S.activeNote);if(deleted){deleted.deletedAt=Math.floor(Date.now()/1000);S.trash.unshift(deleted)}S.notes=S.notes.filter(n=>n.id!==S.activeNote);S.activeNote=null;S.mobileView='list';render();toast('Nota movida a la papelera')}catch(e){toast('Error: '+e.message)}});
 
   // Image upload button
   $('btn-upload')?.addEventListener('click',()=>$('file-upload')?.click());
@@ -494,6 +538,16 @@ function bindApp(){
 
   // Close context menu and folder dropdown on click
   document.addEventListener('click',()=>{document.getElementById('ctx-root').innerHTML='';if(S.showFolderDD){S.showFolderDD=false;render()}});
+
+  // Trash nav
+  document.querySelectorAll('#nav-trash').forEach(el=>el.addEventListener('click',()=>{S.viewTrash=true;S.activeFolder='all';S.activeTag=null;S.activeNote=null;S.sidebarOpen=false;render()}));
+
+  // Empty trash
+  $('btn-empty')?.addEventListener('click',async()=>{if(!confirm('¿Vaciar la papelera? Esta acción no se puede deshacer.'))return;try{await api('empty_trash','DELETE');S.trash=[];render();toast('Papelera vaciada')}catch(e){toast('Error: '+e.message)}});
+
+  // Restore / permanent delete
+  document.querySelectorAll('[data-restore]').forEach(el=>el.addEventListener('click',async()=>{const id=el.dataset.restore;try{const d=await api('restore','POST',{id});const note=d.note;S.trash=S.trash.filter(n=>n.id!==id);S.notes.unshift(note);render();toast('Nota restaurada')}catch(e){toast('Error: '+e.message)}}));
+  document.querySelectorAll('[data-perm-del]').forEach(el=>el.addEventListener('click',async()=>{const id=el.dataset.permDel;if(!confirm('¿Eliminar permanentemente?'))return;try{await api('trash_delete','DELETE',{id});S.trash=S.trash.filter(n=>n.id!==id);render();toast('Nota eliminada permanentemente')}catch(e){toast('Error: '+e.message)}}));
 }
 
 // ─── Context Menu ───
@@ -517,7 +571,7 @@ function showContextMenu(x,y,noteId){
   }));
   root.querySelector('[data-ctx-pin]')?.addEventListener('click',async e=>{e.stopPropagation();note.pinned=!note.pinned;try{await api('notes','PUT',{id:noteId,pinned:note.pinned});render()}catch(e){toast('Error')}root.innerHTML=''});
   root.querySelector('[data-ctx-copy]')?.addEventListener('click',async e=>{e.stopPropagation();try{await navigator.clipboard.writeText(note.content);toast('✓ Copiado')}catch{}root.innerHTML=''});
-  root.querySelector('[data-ctx-del]')?.addEventListener('click',async e=>{e.stopPropagation();if(!confirm('¿Eliminar?'))return;try{await api('notes','DELETE',{id:noteId});S.notes=S.notes.filter(n=>n.id!==noteId);if(S.activeNote===noteId){S.activeNote=null;S.mobileView='list'}render()}catch(e){toast('Error')}root.innerHTML=''});
+  root.querySelector('[data-ctx-del]')?.addEventListener('click',async e=>{e.stopPropagation();if(!confirm('¿Mover a la papelera?'))return;try{await api('notes','DELETE',{id:noteId});const deleted=S.notes.find(n=>n.id===noteId);if(deleted){deleted.deletedAt=Math.floor(Date.now()/1000);S.trash.unshift(deleted)}S.notes=S.notes.filter(n=>n.id!==noteId);if(S.activeNote===noteId){S.activeNote=null;S.mobileView='list'}render();toast('Nota movida a la papelera')}catch(e){toast('Error')}root.innerHTML=''});
 }
 
 // ─── Password Dialog ───
@@ -554,7 +608,7 @@ async function updateNote(ch){const n=S.notes.find(x=>x.id===S.activeNote);if(!n
 function doFormat(t){const el=document.getElementById('editor');if(!el)return;const s=el.selectionStart,e=el.selectionEnd,tx=el.value,sel=tx.slice(s,e);let r='';if(t==='bold')r=`**${sel||'negrita'}**`;else if(t==='italic')r=`_${sel||'cursiva'}_`;else if(t==='heading')r=`## ${sel||'Encabezado'}`;else if(t==='link')r=`[${sel||'texto'}](url)`;else if(t==='video')r=`[▶ ${sel||'Video'}](url-video)`;el.value=tx.slice(0,s)+r+tx.slice(e);el.dispatchEvent(new Event('input'));el.focus();el.setSelectionRange(s,s+r.length)}
 
 // ═══ Init ═══
-async function init(){applyTheme(S.theme);try{const s=await api('session');if(s.user){S.user=s.user;S.notes=await api('notes');S.folders=await api('folders')}}catch{}render();window.addEventListener('resize',render)}
+async function init(){applyTheme(S.theme);try{const s=await api('session');if(s.user){S.user=s.user;S.notes=await api('notes');S.folders=await api('folders');S.trash=await api('trash')}}catch{}render();window.addEventListener('resize',render)}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 init();
 </script>

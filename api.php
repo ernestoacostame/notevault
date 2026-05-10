@@ -128,10 +128,18 @@ if ($action==='notes'&&$method==='PUT') {
 if ($action==='notes'&&$method==='DELETE') {
     $u=auth(); $id=$_GET['id']??''; $d=udir($u);
     $notes=loadJson($d.'/notes.json',[]);
-    $notes=array_values(array_filter($notes,fn($n)=>$n['id']!==$id));
-    saveJson($d.'/notes.json',$notes);
-    $t=$d.'/txt/'.preg_replace('/[^a-f0-9]/','', $id).'.txt';
-    if(file_exists($t))unlink($t);
+    $trash=loadJson($d.'/trash.json',[]);
+    $deleted=null;
+    $remaining=[];
+    foreach($notes as $n) {
+        if($n['id']===$id) { $deleted=$n; } else { $remaining[]=$n; }
+    }
+    if($deleted) {
+        $deleted['deletedAt']=time();
+        array_unshift($trash,$deleted);
+        saveJson($d.'/trash.json',$trash);
+        saveJson($d.'/notes.json',$remaining);
+    }
     jsonRes(['ok'=>true]);
 }
 
@@ -170,6 +178,50 @@ if ($action==='remove_lock'&&$method==='POST') {
         if($n['id']===$id) { $n['locked']=false; saveJson($d.'/notes.json',$notes); jsonRes(['ok'=>true]); }
     }
     jsonRes(['error'=>'No encontrada'],404);
+}
+
+// ═══ TRASH ═══
+if ($action==='trash'&&$method==='GET') {
+    $u=auth(); $trash=loadJson(udir($u).'/trash.json',[]);
+    usort($trash, fn($a,$b)=>($b['deletedAt']??0)-($a['deletedAt']??0));
+    jsonRes($trash);
+}
+if ($action==='restore'&&$method==='POST') {
+    $u=auth(); $i=getInput(); $id=$i['id']??''; $d=udir($u);
+    $trash=loadJson($d.'/trash.json',[]);
+    $notes=loadJson($d.'/notes.json',[]);
+    $restored=null;
+    $remaining=[];
+    foreach($trash as $n) {
+        if($n['id']===$id) { $restored=$n; } else { $remaining[]=$n; }
+    }
+    if(!$restored) jsonRes(['error'=>'No encontrada en papelera'],404);
+    unset($restored['deletedAt']);
+    $restored['updatedAt']=time();
+    array_unshift($notes,$restored);
+    saveJson($d.'/notes.json',$notes);
+    saveJson($d.'/trash.json',$remaining);
+    jsonRes(['ok'=>true,'note'=>$restored]);
+}
+if ($action==='trash_delete'&&$method==='DELETE') {
+    $u=auth(); $id=$_GET['id']??''; $d=udir($u);
+    $trash=loadJson($d.'/trash.json',[]);
+    $trash=array_values(array_filter($trash,fn($n)=>$n['id']!==$id));
+    saveJson($d.'/trash.json',$trash);
+    $t=$d.'/txt/'.preg_replace('/[^a-f0-9]/','', $id).'.txt';
+    if(file_exists($t))unlink($t);
+    jsonRes(['ok'=>true]);
+}
+if ($action==='empty_trash'&&$method==='DELETE') {
+    $u=auth(); $d=udir($u);
+    $trash=loadJson($d.'/trash.json',[]);
+    $td=$d.'/txt';
+    foreach($trash as $n) {
+        $t=$td.'/'.preg_replace('/[^a-f0-9]/','', $n['id']).'.txt';
+        if(file_exists($t))unlink($t);
+    }
+    saveJson($d.'/trash.json',[]);
+    jsonRes(['ok'=>true]);
 }
 
 // ═══ FOLDERS ═══
