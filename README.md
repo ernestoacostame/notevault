@@ -113,3 +113,25 @@ notevault/
 | GET | `api.php?action=folders` | Listar carpetas |
 | POST | `api.php?action=folders` | Crear carpeta |
 | DELETE | `api.php?action=folders&id=X` | Eliminar carpeta |
+
+
+## Instalación via Docker Compose:
+
+### 1. Clonamos el repositorio:
+
+`git clone https://github.com/ernestoacostame/notevault.git`
+
+### 2. Editamos nuestra configuración:
+
+`nano nginx.conf` y tocamos los parámetros indicados en el mismo archivo
+
+### 3. Ejecutamos Docker Compose:
+
+`docker compose up -d`
+
+- Para ver los logs:
+`docker compose logs -f`
+
+### 4. ¡Listo!
+
+**Abrimos Notevault desde nuestro navegador web usando IP_LOCAL:8080**
