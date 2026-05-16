@@ -259,6 +259,7 @@ input,textarea,select,button{font-family:inherit}
 </head>
 <body>
 <input type="file" id="file-upload" accept="image/*" style="display:none" />
+<input type="file" id="import-file" accept=".json" style="display:none" />
 <div id="app"></div>
 <div id="ctx-root"></div>
 <div id="pw-root"></div>
@@ -349,7 +350,7 @@ function ncHTML(n){
 }
 
 function sbHTML(tags){
-  return`<div class="sb-brand"><h1>NoteVault</h1><div class="sb-actions"><button id="btn-th" title="Tema"><span class="mi mi-sm">palette</span></button><button id="btn-lo" title="Salir"><span class="mi mi-sm">logout</span></button></div></div>
+  return`<div class="sb-brand"><h1>NoteVault</h1><div class="sb-actions"><button id="btn-exp" title="Exportar"><span class="mi mi-sm">download</span></button><button id="btn-imp" title="Importar"><span class="mi mi-sm">upload</span></button><button id="btn-th" title="Tema"><span class="mi mi-sm">palette</span></button><button id="btn-lo" title="Salir"><span class="mi mi-sm">logout</span></button></div></div>
     ${S.showThemePicker?'<div class="theme-row">'+Object.entries(THEMES).map(([k,v])=>`<div class="th-dot ${S.theme===k?'active':''}" data-theme="${k}" style="background:${v.d}" title="${v.n}"></div>`).join('')+'</div>':''}
     <div class="sb-search"><span class="mi">search</span><input id="search" placeholder="Buscar notas..." value="${esc(S.searchQuery)}" /></div>
     <div class="sb-nav">
@@ -432,6 +433,32 @@ function bindApp(){
   $('btn-th')?.addEventListener('click',()=>{S.showThemePicker=!S.showThemePicker;render()});
   document.querySelectorAll('.th-dot').forEach(el=>el.addEventListener('click',()=>{S.theme=el.dataset.theme;localStorage.setItem('nv_theme',S.theme);applyTheme(S.theme);S.showThemePicker=false;render()}));
   $('btn-lo')?.addEventListener('click',async()=>{await api('logout').catch(()=>{});S.user=null;S.notes=[];S.folders=[];S.activeNote=null;render()});
+
+  // Export / Import
+  $('btn-exp')?.addEventListener('click',()=>{
+    const data={notes:S.notes,folders:S.folders};
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download='notevault_backup.json';a.click();URL.revokeObjectURL(url);
+    toast('Datos exportados');
+  });
+  $('btn-imp')?.addEventListener('click',()=>$('import-file')?.click());
+  const impF=$('import-file');
+  if(impF)impF.onchange=function(){
+    if(!this.files.length)return;
+    const reader=new FileReader();
+    reader.onload=async(ev)=>{
+      try{
+        const data=JSON.parse(ev.target.result);
+        if(!data.notes||!Array.isArray(data.notes))throw new Error('Formato inválido');
+        await api('import','POST',data);
+        toast('Datos importados');
+        S.notes=await api('notes');S.folders=await api('folders');render();
+      }catch(err){toast('Error al importar: '+err.message)}
+    };
+    reader.readAsText(this.files[0]);
+    this.value='';
+  };
 
   // Search
   const se=$('search');

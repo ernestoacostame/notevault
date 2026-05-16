@@ -243,6 +243,32 @@ if ($action==='folders'&&$method==='DELETE') {
     jsonRes(['ok'=>true]);
 }
 
+// ═══ IMPORT/EXPORT ═══
+if ($action==='import'&&$method==='POST') {
+    $u=auth(); $i=getInput(); $d=udir($u);
+    $notes=loadJson($d.'/notes.json',[]);
+    $folders=loadJson($d.'/folders.json',[]);
+    $importedNotes=$i['notes']??[];
+    $importedFolders=$i['folders']??[];
+    $folderIds = array_column($folders, 'id');
+    foreach($importedFolders as $f) {
+        if(isset($f['id']) && !in_array($f['id'], $folderIds)) {
+            $folders[]=$f; $folderIds[]=$f['id'];
+        }
+    }
+    saveJson($d.'/folders.json',$folders);
+    $noteIds = array_column($notes, 'id');
+    $td=$d.'/txt'; if(!is_dir($td))mkdir($td,0700,true);
+    foreach($importedNotes as $n) {
+        if(isset($n['id'], $n['title'], $n['content']) && !in_array($n['id'], $noteIds)) {
+            $notes[]=$n; $noteIds[]=$n['id'];
+            file_put_contents($td.'/'.$n['id'].'.txt',$n['content'],LOCK_EX);
+        }
+    }
+    saveJson($d.'/notes.json',$notes);
+    jsonRes(['ok'=>true]);
+}
+
 // ═══ IMAGE UPLOAD ═══
 if ($action==='upload'&&$method==='POST') {
     $u=auth();
