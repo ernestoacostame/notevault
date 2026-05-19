@@ -8,12 +8,12 @@ RUN apk add --no-cache bash
 # Establecemos el directorio de trabajo
 WORKDIR /var/www/html
 
-# Creamos el directorio de datos y ajustamos permisos para el usuario www-data
-RUN mkdir -p /var/www/html/data && \
-    chown -R www-data:www-data /var/www/html/data && \
-    chmod 700 /var/www/html/data
+# 1. Copiamos todo el repositorio hacia adentro de la imagen
+COPY . /var/www/html/
 
-# Exponemos el puerto de PHP-FPM
+# 2. Le damos el control total a www-data (pero solo ADENTRO del contenedor)
+RUN chown -R www-data:www-data /var/www/html && \
+    chmod -R 775 /var/www/html
+
 EXPOSE 9000
-
 CMD ["php-fpm"]
